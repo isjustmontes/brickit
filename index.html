@@ -279,6 +279,7 @@
   function launchBall() {
     if (!ball.stuck) return;
     ball.stuck = false;
+    game.state = STATE.PLAYING;
     const speed = ballSpeedForLevel(game.level);
     const angle = (-Math.PI / 2) + (Math.random() * 0.6 - 0.3);
     ball.vx = Math.cos(angle) * speed;
