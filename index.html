@@ -2,7 +2,8 @@
 <html lang="es">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#0b0e1a">
 <title>BrickIt — Arkanoid</title>
 <style>
   :root {
@@ -12,6 +13,8 @@
     --accent2: #f72585;
     --text: #e8ecf8;
     --muted: #8b93b3;
+    --chrome-h: 215px;
+    --stage-w: min(800px, 96vw);
   }
   * { margin: 0; padding: 0; box-sizing: border-box; }
   html, body {
@@ -22,10 +25,21 @@
     display: flex;
     flex-direction: column;
     align-items: center;
-    justify-content: center;
     min-height: 100vh;
+    min-height: 100dvh;
     user-select: none;
-    overflow: hidden;
+    overflow-x: hidden;
+    overflow-y: auto;
+    overscroll-behavior: none;
+    -webkit-tap-highlight-color: transparent;
+    padding: 12px 0 calc(12px + env(safe-area-inset-bottom));
+  }
+  .app {
+    margin: auto;
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
   }
   .logo {
     text-align: center;
@@ -54,7 +68,7 @@
     gap: 28px;
     align-items: center;
     justify-content: space-between;
-    width: min(800px, 94vw);
+    width: var(--stage-w);
     padding: 8px 14px;
     background: var(--panel);
     border: 1px solid rgba(255,255,255,0.06);
@@ -79,6 +93,9 @@
   .hud .btn:hover { border-color: var(--accent); color: var(--accent); }
   #stage {
     display: block;
+    width: var(--stage-w);
+    height: auto;
+    max-width: 100%;
     background: #0d1122;
     border: 1px solid rgba(255,255,255,0.06);
     border-top: none;
@@ -101,24 +118,123 @@
     font-size: 11px;
     color: var(--text);
   }
+  .help-touch { display: none; }
+
+  .controls {
+    display: none;
+    gap: 12px;
+    width: var(--stage-w);
+    margin-top: 10px;
+    align-items: stretch;
+    justify-content: center;
+  }
+  .ctl {
+    touch-action: manipulation;
+    background: var(--panel);
+    border: 1px solid rgba(255,255,255,0.14);
+    color: var(--text);
+    border-radius: 14px;
+    height: 58px;
+    min-width: 58px;
+    font-size: 20px;
+    font-family: inherit;
+    cursor: pointer;
+    transition: background .1s, border-color .1s, transform .05s;
+    user-select: none;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .ctl:active {
+    background: #1c2340;
+    border-color: var(--accent);
+    transform: translateY(1px);
+  }
+  .ctl.arrow { flex: 1; max-width: 130px; }
+  .ctl.action {
+    flex: 2;
+    max-width: 230px;
+    font-weight: 700;
+    letter-spacing: 1px;
+    font-size: 15px;
+    color: var(--accent);
+    border-color: rgba(76,201,240,0.5);
+  }
+
+  .footer {
+    margin-top: 14px;
+    color: var(--muted);
+    font-size: 12px;
+    letter-spacing: .5px;
+  }
+  .footer a {
+    color: var(--accent);
+    text-decoration: none;
+    touch-action: manipulation;
+  }
+  .footer a:hover { text-decoration: underline; }
+
+  /* Ajuste del ancho del escenario a la altura disponible (sin scroll) */
+  @supports (height: 100dvh) {
+    .hud, #stage, .controls {
+      width: min(800px, 96vw, calc((100dvh - var(--chrome-h)) * 4 / 3));
+    }
+  }
+
+  /* Pantallas pequeñas / móviles */
+  @media (max-width: 700px), (hover: none) and (pointer: coarse) {
+    :root { --chrome-h: 285px; }
+    .controls { display: flex; }
+    .help-kb { display: none; }
+    .help-touch { display: block; }
+    .hud { gap: 8px; padding: 6px 10px; flex-wrap: wrap; justify-content: center; }
+    .hud .label { display: none; }
+    .hud .value { font-size: 16px; min-width: 30px; }
+    .hud .lives { font-size: 15px; letter-spacing: 2px; }
+    .hud .btn { padding: 5px 9px; font-size: 11px; letter-spacing: 0; }
+    .logo { font-size: clamp(24px, 7vw, 34px); letter-spacing: 3px; margin-bottom: 6px; }
+    .logo small { font-size: 10px; letter-spacing: 4px; }
+    .help { margin-top: 8px; font-size: 11px; text-align: center; padding: 0 8px; }
+  }
+
+  /* Móvil en horizontal: maximiza el lienzo */
+  @media (max-height: 500px) {
+    :root { --chrome-h: 215px; }
+    .logo { font-size: 22px; margin-bottom: 4px; }
+    .logo small { display: none; }
+    .help-kb, .help-touch { display: none; }
+    .controls { margin-top: 6px; }
+    .ctl { height: 46px; font-size: 17px; }
+    .ctl.action { font-size: 13px; }
+    .footer { margin-top: 6px; font-size: 11px; }
+  }
 </style>
 </head>
 <body>
 
+<div class="app">
 <div class="logo">BrickIt<small>Arkanoid Minigame</small></div>
 
 <div class="hud">
-  <div class="item"><span class="label">Puntos</span><span class="value" id="score">0</span></div>
-  <div class="item"><span class="label">Nivel</span><span class="value" id="level">1</span></div>
-  <div class="item"><span class="label">Vidas</span><span class="lives" id="lives">♥♥♥</span></div>
+  <div class="item" aria-label="Puntos"><span class="label">Puntos</span><span class="value" id="score">0</span></div>
+  <div class="item" aria-label="Nivel"><span class="label">Nivel</span><span class="value" id="level">1</span></div>
+  <div class="item" aria-label="Vidas"><span class="label">Vidas</span><span class="lives" id="lives">♥♥♥</span></div>
   <button class="btn" id="btnSound" type="button">♪ Sonido: ON</button>
   <button class="btn" id="btnRestart" type="button"> Reiniciar</button>
 </div>
 
 <canvas id="stage" width="800" height="600"></canvas>
 
-<div class="help">
+<div class="help help-kb">
   <kbd>←</kbd> <kbd>→</kbd> o ratón para mover · <kbd>Espacio</kbd> lanzar / pausar · <kbd>M</kbd> silenciar
+</div>
+<div class="help help-touch">Arrastra en la pantalla para mover · Toca «Lanzar» o la pantalla para iniciar</div>
+
+<div class="controls" id="controls">
+  <button class="ctl arrow" id="btnLeft" type="button" aria-label="Mover a la izquierda">◀</button>
+  <button class="ctl action" id="btnAction" type="button">Lanzar</button>
+  <button class="ctl arrow" id="btnRight" type="button" aria-label="Mover a la derecha">▶</button>
+</div>
+
+<footer class="footer">Creado por <a href="https://github.com/isjustmontes" target="_blank" rel="noopener noreferrer">@isjustmontes</a></footer>
 </div>
 
 <script>
@@ -135,6 +251,9 @@
   const elLives = document.getElementById("lives");
   const btnSound = document.getElementById("btnSound");
   const btnRestart = document.getElementById("btnRestart");
+  const btnAction = document.getElementById("btnAction");
+  const btnLeft = document.getElementById("btnLeft");
+  const btnRight = document.getElementById("btnRight");
 
   /* ---------------- Sonido (Web Audio API, sintético) ---------------- */
   const Sound = (() => {
@@ -322,17 +441,19 @@
   }
 
   /* ---------------- Entrada ---------------- */
+  function actionPress() {
+    Sound.unlock();
+    if (game.state === STATE.READY) launchBall();
+    else if (game.state === STATE.PLAYING) game.state = STATE.PAUSED;
+    else if (game.state === STATE.PAUSED) game.state = STATE.PLAYING;
+    else if (game.state === STATE.GAMEOVER || game.state === STATE.WIN) startGame();
+  }
+
   window.addEventListener("keydown", (e) => {
     Sound.unlock();
     if (e.code === "ArrowLeft")  { keys.left = true;  mouse.active = false; e.preventDefault(); }
     if (e.code === "ArrowRight") { keys.right = true; mouse.active = false; e.preventDefault(); }
-    if (e.code === "Space") {
-      e.preventDefault();
-      if (game.state === STATE.READY) launchBall();
-      else if (game.state === STATE.PLAYING) game.state = STATE.PAUSED;
-      else if (game.state === STATE.PAUSED) game.state = STATE.PLAYING;
-      else if (game.state === STATE.GAMEOVER || game.state === STATE.WIN) startGame();
-    }
+    if (e.code === "Space") { e.preventDefault(); actionPress(); }
     if (e.code === "KeyM") toggleSound();
     if (e.code === "KeyR") startGame();
   });
@@ -377,6 +498,35 @@
   }
   btnSound.addEventListener("click", (e) => { e.stopPropagation(); toggleSound(); });
   btnRestart.addEventListener("click", (e) => { e.stopPropagation(); Sound.unlock(); startGame(); });
+
+  /* ---------------- Controles táctiles (móvil) ---------------- */
+  function bindHold(btn, dir) {
+    const press = (e) => {
+      e.preventDefault();
+      Sound.unlock();
+      keys[dir] = true;
+      mouse.active = false;
+    };
+    const release = () => { keys[dir] = false; };
+    btn.addEventListener("pointerdown", press);
+    btn.addEventListener("pointerup", release);
+    btn.addEventListener("pointercancel", release);
+    btn.addEventListener("pointerleave", release);
+    btn.addEventListener("contextmenu", (e) => e.preventDefault());
+  }
+  bindHold(btnLeft, "left");
+  bindHold(btnRight, "right");
+
+  btnAction.addEventListener("click", (e) => { e.preventDefault(); actionPress(); });
+  btnAction.addEventListener("contextmenu", (e) => e.preventDefault());
+  canvas.addEventListener("contextmenu", (e) => e.preventDefault());
+
+  const releaseAllKeys = () => { keys.left = false; keys.right = false; };
+  window.addEventListener("blur", releaseAllKeys);
+  document.addEventListener("visibilitychange", () => {
+    releaseAllKeys();
+    if (document.hidden && game.state === STATE.PLAYING) game.state = STATE.PAUSED;
+  });
 
   /* ---------------- Física ---------------- */
   function update(dt) {
@@ -675,7 +825,7 @@
     if (game.state === STATE.GAMEOVER || game.state === STATE.WIN) {
       ctx.fillStyle = "#8b93b3";
       ctx.font = "400 14px 'Segoe UI', system-ui, sans-serif";
-      ctx.fillText("Espacio o clic para jugar de nuevo", W / 2, H / 2 + 62);
+      ctx.fillText("Pulsa Espacio, la pantalla o «Reiniciar» para jugar de nuevo", W / 2, H / 2 + 62);
     }
   }
 
@@ -699,12 +849,22 @@
   }
 
   /* ---------------- Bucle principal ---------------- */
+  const ACTION_LABELS = {
+    [STATE.READY]: "Lanzar",
+    [STATE.PLAYING]: "Pausa",
+    [STATE.PAUSED]: "Seguir",
+    [STATE.GAMEOVER]: "Reiniciar",
+    [STATE.WIN]: "Reiniciar",
+    [STATE.LEVELCLEAR]: "…"
+  };
   let last = performance.now();
   function frame(now) {
     const dt = Math.max(0, Math.min(0.033, (now - last) / 1000));
     last = now;
     update(dt);
     draw();
+    const label = ACTION_LABELS[game.state] || "—";
+    if (btnAction.textContent !== label) btnAction.textContent = label;
     requestAnimationFrame(frame);
   }
 
