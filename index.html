@@ -234,7 +234,7 @@
   <button class="ctl arrow" id="btnRight" type="button" aria-label="Mover a la derecha">▶</button>
 </div>
 
-<footer class="footer">Creado por <a href="https://github.com/isjustmontes" target="_blank" rel="noopener noreferrer">@isjustmontes</a></footer>
+<footer class="footer">Creado por <a href="https://github.com/isjustmontes" target="_blank" rel="noopener noreferrer">@isjustmontes</a> - v1.0.4</footer>
 </div>
 
 <script>
@@ -319,6 +319,8 @@
       lose()    { tone({ freq: 300, end: 70, dur: 0.45, type: "sawtooth", vol: 0.14 }); },
       win()     { [523, 659, 784, 1047].forEach((f, i) => tone({ freq: f, dur: 0.18, type: "triangle", vol: 0.12, delay: i * 0.12 })); },
       launch()  { tone({ freq: 180, end: 420, dur: 0.1, type: "triangle", vol: 0.10 }); },
+      powerup()   { [523, 659, 784].forEach((f, i) => tone({ freq: f, dur: 0.1, type: "sine", vol: 0.12, delay: i * 0.07 })); },
+      powerdown() { tone({ freq: 260, end: 90, dur: 0.35, type: "sawtooth", vol: 0.12 }); },
       lifeUp()  { [660, 880].forEach((f, i) => tone({ freq: f, dur: 0.12, type: "sine", vol: 0.12, delay: i * 0.1 })); }
     };
   })();
@@ -334,6 +336,8 @@
   const ROW_COLORS = ["#f72585", "#b5179e", "#7209b7", "#560bad", "#4361ee", "#4cc9f0"];
   const ROW_POINTS = [7, 6, 5, 4, 3, 2];
 
+  const POWERUPS = { chance: 0.12, goodChance: 0.6, fallSpeed: 130, w: 22, h: 22, duration: 12 };
+
   const game = {
     state: STATE.READY,
     score: 0,
@@ -343,12 +347,15 @@
     bricks: [],
     bricksLeft: 0,
     particles: [],
+    powerups: [],
+    powerTime: 0,
+    powerType: null,
     shake: 0,
     levelBanner: 0,
     best: 0
   };
 
-  const paddle = { x: W / 2 - PADDLE.w / 2, w: PADDLE.w };
+  const paddle = { x: W / 2 - PADDLE.w / 2, w: PADDLE.w, baseW: PADDLE.w };
   const ball = { x: W / 2, y: PADDLE.y - BALL_R - 1, vx: 0, vy: 0, r: BALL_R, stuck: true, trail: [] };
 
   const keys = { left: false, right: false };
@@ -358,11 +365,11 @@
 
   /* ---------------- Niveles ---------------- */
   const LEVELS = [
-    { name: "Clásico",   test: (r, c) => r < 5 },
-    { name: "Pirámide",  test: (r, c) => r <= 4 && c >= 4 - r && c <= 5 + r },
     { name: "Columnas",  test: (r, c) => c % 3 !== 2 },
-    { name: "Zigzag",    test: (r, c) => ((r + c) % 4) < 2 },
+    { name: "Pirámide",  test: (r, c) => r <= 4 && c >= 4 - r && c <= 5 + r },
+    { name: "Clásico",   test: (r, c) => r < 5 },
     { name: "Diamante",  test: (r, c) => Math.abs(c - 4.5) + Math.abs(r - 2.5) <= 4.5 },
+    { name: "Zigzag",    test: (r, c) => ((r + c) % 4) < 2 },
     { name: "Fortaleza", test: (r, c) => !(r >= 2 && r <= 3 && c >= 3 && c <= 6) }
   ];
 
@@ -423,7 +430,11 @@
     game.bricks = buildLevel(level);
     game.bricksLeft = game.bricks.length;
     game.particles.length = 0;
-    paddle.w = Math.max(72, PADDLE.w - (level - 1) * 8);
+    game.powerups.length = 0;
+    game.powerTime = 0;
+    game.powerType = null;
+    paddle.baseW = Math.max(72, PADDLE.w - (level - 1) * 8);
+    paddle.w = paddle.baseW;
     paddle.x = W / 2 - paddle.w / 2;
     resetBall(true);
     if (!keepLives) game.lives = 3;
@@ -573,6 +584,31 @@
       return;
     }
 
+    // Objetos que caen
+    if (game.powerTime > 0) {
+      game.powerTime -= dt;
+      if (game.powerTime <= 0) {
+        game.powerTime = 0;
+        game.powerType = null;
+        paddle.w = paddle.baseW;
+        paddle.x = Math.max(8, Math.min(W - paddle.w - 8, paddle.x));
+      }
+    }
+    for (let i = game.powerups.length - 1; i >= 0; i--) {
+      const u = game.powerups[i];
+      u.y += POWERUPS.fallSpeed * dt;
+      if (u.y > H) { game.powerups.splice(i, 1); continue; }
+      if (
+        u.y + u.h >= PADDLE.y &&
+        u.y <= PADDLE.y + PADDLE.h &&
+        u.x + u.w >= paddle.x &&
+        u.x <= paddle.x + paddle.w
+      ) {
+        game.powerups.splice(i, 1);
+        applyPowerup(u.type);
+      }
+    }
+
     // Rastro
     ball.trail.push({ x: ball.x, y: ball.y });
     if (ball.trail.length > 12) ball.trail.shift();
@@ -657,6 +693,7 @@
     Sound.brick(BRICKS.rows - b.row);
     burst(b.x + b.w / 2, b.y + b.h / 2, ROW_COLORS[b.row], 12);
     game.shake = Math.min(1, game.shake + 0.25);
+    if (Math.random() < POWERUPS.chance) spawnPowerup(b);
 
     if (game.bricksLeft <= 0) {
       addScore(250 * game.level);
@@ -676,6 +713,12 @@
     game.lives--;
     updateHud();
     game.shake = 1;
+    game.powerups.length = 0;
+    if (game.powerTime > 0) {
+      game.powerTime = 0;
+      game.powerType = null;
+      paddle.w = paddle.baseW;
+    }
     if (game.lives <= 0) {
       game.state = STATE.GAMEOVER;
       Sound.lose();
@@ -687,6 +730,28 @@
   }
 
   /* ---------------- Efectos ---------------- */
+  function spawnPowerup(b) {
+    game.powerups.push({
+      x: b.x + (b.w - POWERUPS.w) / 2,
+      y: b.y,
+      w: POWERUPS.w,
+      h: POWERUPS.h,
+      type: Math.random() < POWERUPS.goodChance ? "good" : "bad"
+    });
+  }
+
+  function applyPowerup(type) {
+    const factor = type === "good" ? 1.7 : 0.55;
+    paddle.w = type === "good"
+      ? Math.min(240, Math.round(paddle.baseW * factor))
+      : Math.max(46, Math.round(paddle.baseW * factor));
+    paddle.x = Math.max(8, Math.min(W - paddle.w - 8, paddle.x));
+    game.powerTime = POWERUPS.duration;
+    game.powerType = type;
+    burst(paddle.x + paddle.w / 2, PADDLE.y, type === "good" ? "#2ec866" : "#ff4d4d", 14);
+    if (type === "good") Sound.powerup(); else Sound.powerdown();
+  }
+
   function burst(x, y, color, n) {
     for (let i = 0; i < n; i++) {
       const a = Math.random() * Math.PI * 2;
@@ -728,6 +793,7 @@
     drawBricks();
     drawPaddle();
     drawBall();
+    drawPowerups();
     drawParticles();
 
     if (game.levelBanner > 0 && (game.state === STATE.READY || game.state === STATE.PLAYING)) {
@@ -786,6 +852,32 @@
     ctx.fillStyle = "rgba(255,255,255,0.25)";
     roundRect(x + 3, y + 2, w - 6, 4, 2);
     ctx.fill();
+
+    // Barra de duración del efecto activo
+    if (game.powerTime > 0 && game.powerType) {
+      const color = game.powerType === "good" ? "#2ec866" : "#ff4d4d";
+      ctx.fillStyle = "rgba(255,255,255,0.12)";
+      ctx.fillRect(x, y - 9, w, 4);
+      ctx.fillStyle = color;
+      ctx.fillRect(x, y - 9, (game.powerTime / POWERUPS.duration) * w, 4);
+    }
+  }
+
+  function drawPowerups() {
+    for (const u of game.powerups) {
+      const color = u.type === "good" ? "#2ec866" : "#ff4d4d";
+      ctx.shadowColor = color;
+      ctx.shadowBlur = 14;
+      ctx.fillStyle = color;
+      roundRect(u.x, u.y, u.w, u.h, 6);
+      ctx.fill();
+      ctx.shadowBlur = 0;
+      ctx.fillStyle = "#0b0e1a";
+      ctx.font = "800 16px 'Segoe UI', system-ui, sans-serif";
+      ctx.textAlign = "center";
+      ctx.fillText(u.type === "good" ? "+" : "−", u.x + u.w / 2, u.y + u.h / 2 + 6);
+      ctx.textAlign = "left";
+    }
   }
 
   function drawBall() {
