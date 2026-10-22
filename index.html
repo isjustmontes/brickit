@@ -339,7 +339,7 @@
     score: 0,
     lives: 3,
     level: 1,
-    maxLevel: 3,
+    maxLevel: 6,
     bricks: [],
     bricksLeft: 0,
     particles: [],
@@ -357,13 +357,25 @@
   try { game.best = parseInt(localStorage.getItem("brickit_best") || "0", 10) || 0; } catch (_) {}
 
   /* ---------------- Niveles ---------------- */
+  const LEVELS = [
+    { name: "Clásico",   test: (r, c) => r < 5 },
+    { name: "Pirámide",  test: (r, c) => r <= 4 && c >= 4 - r && c <= 5 + r },
+    { name: "Columnas",  test: (r, c) => c % 3 !== 2 },
+    { name: "Zigzag",    test: (r, c) => ((r + c) % 4) < 2 },
+    { name: "Diamante",  test: (r, c) => Math.abs(c - 4.5) + Math.abs(r - 2.5) <= 4.5 },
+    { name: "Fortaleza", test: (r, c) => !(r >= 2 && r <= 3 && c >= 3 && c <= 6) }
+  ];
+
+  function levelName(level) {
+    return (LEVELS[Math.min(level, LEVELS.length) - 1] || {}).name || "";
+  }
+
   function buildLevel(level) {
+    const layout = LEVELS[Math.min(level, LEVELS.length) - 1];
     const bricks = [];
-    const density = [0.9, 0.8, 0.7][Math.min(level, 3) - 1] ?? 0.7;
     for (let r = 0; r < BRICKS.rows; r++) {
       for (let c = 0; c < BRICKS.cols; c++) {
-        const skip = ((r * 7 + c * 3 + level * 5) % 10) / 10 >= density;
-        if (skip) continue;
+        if (!layout.test(r, c)) continue;
         bricks.push({
           x: BRICKS.offX + c * (BRICKS.w + BRICKS.pad),
           y: BRICKS.top + r * (BRICKS.h + BRICKS.pad),
@@ -427,7 +439,7 @@
 
   function updateHud() {
     elScore.textContent = String(game.score);
-    elLevel.textContent = String(game.level);
+    elLevel.textContent = `${game.level} / ${game.maxLevel}`;
     elLives.textContent = game.lives > 0 ? "♥".repeat(game.lives) : "—";
   }
 
@@ -724,7 +736,7 @@
       ctx.fillStyle = "#e8ecf8";
       ctx.font = "700 34px 'Segoe UI', system-ui, sans-serif";
       ctx.textAlign = "center";
-      ctx.fillText(`NIVEL ${game.level}`, W / 2, H / 2 - 60);
+      ctx.fillText(`NIVEL ${game.level} · ${levelName(game.level)}`, W / 2, H / 2 - 60);
       ctx.font = "400 16px 'Segoe UI', system-ui, sans-serif";
       ctx.fillStyle = "#8b93b3";
       ctx.fillText(`Destruye todos los ladrillos · Mejor: ${game.best}`, W / 2, H / 2 - 30);
@@ -733,9 +745,9 @@
 
     if (game.state === STATE.READY) drawOverlay("BrickIt", "Pulsa ESPACIO o haz clic para lanzar", "#4cc9f0");
     if (game.state === STATE.PAUSED) drawOverlay("PAUSA", "Espacio para continuar", "#8b93b3");
-    if (game.state === STATE.LEVELCLEAR) drawOverlay(`¡Nivel ${game.level} superado!`, `+${250 * game.level} puntos · siguiente nivel...`, "#4cc9f0");
+    if (game.state === STATE.LEVELCLEAR) drawOverlay(`¡Nivel ${game.level} superado!`, `+${250 * game.level} puntos · Siguiente: ${levelName(game.level + 1)}...`, "#4cc9f0");
     if (game.state === STATE.GAMEOVER) drawOverlay("GAME OVER", `Puntuación: ${game.score} · Mejor: ${game.best} — Espacio/R para reiniciar`, "#f72585");
-    if (game.state === STATE.WIN) drawOverlay("¡VICTORIA!", `Puntuación final: ${game.score} · Mejor: ${game.best} — Espacio/R para reiniciar`, "#7b61ff");
+    if (game.state === STATE.WIN) drawOverlay("¡Victoria Final!", `Has completado todos los niveles · Puntuación: ${game.score} · Mejor: ${game.best}`, "#7b61ff");
 
     ctx.restore();
   }
