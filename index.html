@@ -234,7 +234,7 @@
   <button class="ctl arrow" id="btnRight" type="button" aria-label="Mover a la derecha">▶</button>
 </div>
 
-<footer class="footer">Creado por <a href="https://github.com/isjustmontes" target="_blank" rel="noopener noreferrer">@isjustmontes</a> - v1.0.4</footer>
+<footer class="footer">Creado por <a href="https://github.com/isjustmontes" target="_blank" rel="noopener noreferrer">@isjustmontes</a> - v1.0.5</footer>
 </div>
 
 <script>
@@ -321,6 +321,7 @@
       launch()  { tone({ freq: 180, end: 420, dur: 0.1, type: "triangle", vol: 0.10 }); },
       powerup()   { [523, 659, 784].forEach((f, i) => tone({ freq: f, dur: 0.1, type: "sine", vol: 0.12, delay: i * 0.07 })); },
       powerdown() { tone({ freq: 260, end: 90, dur: 0.35, type: "sawtooth", vol: 0.12 }); },
+      multiball() { [392, 523, 659, 784].forEach((f, i) => tone({ freq: f, dur: 0.09, type: "square", vol: 0.09, delay: i * 0.05 })); },
       lifeUp()  { [660, 880].forEach((f, i) => tone({ freq: f, dur: 0.12, type: "sine", vol: 0.12, delay: i * 0.1 })); }
     };
   })();
@@ -336,14 +337,14 @@
   const ROW_COLORS = ["#f72585", "#b5179e", "#7209b7", "#560bad", "#4361ee", "#4cc9f0"];
   const ROW_POINTS = [7, 6, 5, 4, 3, 2];
 
-  const POWERUPS = { chance: 0.12, goodChance: 0.6, fallSpeed: 130, w: 22, h: 22, duration: 12 };
+  const POWERUPS = { chance: 0.12, goodChance: 0.5, badChance: 0.2, fallSpeed: 130, w: 22, h: 22, duration: 12 };
 
   const game = {
     state: STATE.READY,
     score: 0,
     lives: 3,
     level: 1,
-    maxLevel: 6,
+    maxLevel: 15,
     bricks: [],
     bricksLeft: 0,
     particles: [],
@@ -356,7 +357,9 @@
   };
 
   const paddle = { x: W / 2 - PADDLE.w / 2, w: PADDLE.w, baseW: PADDLE.w };
-  const ball = { x: W / 2, y: PADDLE.y - BALL_R - 1, vx: 0, vy: 0, r: BALL_R, stuck: true, trail: [] };
+  const MAX_BALLS = 6;
+  const balls = [];
+  const createBall = (x, y, stuck = false) => ({ x, y, vx: 0, vy: 0, r: BALL_R, stuck, trail: [] });
 
   const keys = { left: false, right: false };
   const mouse = { x: W / 2, active: false };
@@ -365,12 +368,21 @@
 
   /* ---------------- Niveles ---------------- */
   const LEVELS = [
-    { name: "Columnas",  test: (r, c) => c % 3 !== 2 },
-    { name: "Pirámide",  test: (r, c) => r <= 4 && c >= 4 - r && c <= 5 + r },
-    { name: "Clásico",   test: (r, c) => r < 5 },
-    { name: "Diamante",  test: (r, c) => Math.abs(c - 4.5) + Math.abs(r - 2.5) <= 4.5 },
-    { name: "Zigzag",    test: (r, c) => ((r + c) % 4) < 2 },
-    { name: "Fortaleza", test: (r, c) => !(r >= 2 && r <= 3 && c >= 3 && c <= 6) }
+    { name: "Columnas",    test: (r, c) => c % 3 !== 2 },
+    { name: "Pirámide",    test: (r, c) => r <= 4 && c >= 4 - r && c <= 5 + r },
+    { name: "Clásico",     test: (r, c) => r < 5 },
+    { name: "Diamante",    test: (r, c) => Math.abs(c - 4.5) + Math.abs(r - 2.5) <= 4.5 },
+    { name: "Zigzag",      test: (r, c) => ((r + c) % 4) < 2 },
+    { name: "Fortaleza",   test: (r, c) => !(r >= 2 && r <= 3 && c >= 3 && c <= 6) },
+    { name: "Embudo",      test: (r, c) => r <= 4 && c >= r && c <= 9 - r },
+    { name: "Tablero",     test: (r, c) => (r + c) % 2 === 0 },
+    { name: "Marco",       test: (r, c) => r === 0 || r === BRICKS.rows - 1 || c === 0 || c === BRICKS.cols - 1 },
+    { name: "Doble Torre", test: (r, c) => c <= 1 || c >= 8 || (c >= 4 && c <= 5) },
+    { name: "Escalera",    test: (r, c) => c >= r - 1 && c <= r + 4 },
+    { name: "Cruz",        test: (r, c) => (c >= 3 && c <= 6) || (r >= 2 && r <= 3) },
+    { name: "Panal",       test: (r, c) => (r + c) % 3 !== 2 },
+    { name: "Rejilla",     test: (r, c) => !(r % 2 === 1 && (c === 2 || c === 7)) && !(r >= 2 && r <= 3 && c >= 4 && c <= 5) },
+    { name: "Ciudadela",   test: (r, c) => !((r === 2 || r === 3) && (c === 4 || c === 5)) && !(r === 4 && (c === 2 || c === 7)) }
   ];
 
   function levelName(level) {
@@ -402,26 +414,31 @@
 
   /* ---------------- Ciclo de vida de partida ---------------- */
   function resetBall(stuck = true) {
-    ball.stuck = stuck;
-    ball.vx = 0;
-    ball.vy = 0;
-    ball.trail.length = 0;
-    stickBallToPaddle();
+    balls.length = 0;
+    balls.push(createBall(paddle.x + paddle.w / 2, PADDLE.y - BALL_R - 1, stuck));
   }
 
-  function stickBallToPaddle() {
-    ball.x = paddle.x + paddle.w / 2;
-    ball.y = PADDLE.y - ball.r - 1;
+  function stickBallsToPaddle() {
+    for (const b of balls) {
+      if (!b.stuck) continue;
+      b.x = paddle.x + paddle.w / 2;
+      b.y = PADDLE.y - b.r - 1;
+    }
   }
 
   function launchBall() {
-    if (!ball.stuck) return;
-    ball.stuck = false;
+    let launched = false;
+    for (const b of balls) {
+      if (!b.stuck) continue;
+      b.stuck = false;
+      const speed = ballSpeedForLevel(game.level);
+      const angle = (-Math.PI / 2) + (Math.random() * 0.6 - 0.3);
+      b.vx = Math.cos(angle) * speed;
+      b.vy = Math.sin(angle) * speed;
+      launched = true;
+    }
+    if (!launched) return;
     game.state = STATE.PLAYING;
-    const speed = ballSpeedForLevel(game.level);
-    const angle = (-Math.PI / 2) + (Math.random() * 0.6 - 0.3);
-    ball.vx = Math.cos(angle) * speed;
-    ball.vy = Math.sin(angle) * speed;
     Sound.launch();
   }
 
@@ -579,8 +596,8 @@
     }
     paddle.x = Math.max(8, Math.min(W - paddle.w - 8, paddle.x));
 
-    if (ball.stuck) {
-      stickBallToPaddle();
+    if (game.state === STATE.READY) {
+      stickBallsToPaddle();
       return;
     }
 
@@ -609,6 +626,14 @@
       }
     }
 
+    for (let i = balls.length - 1; i >= 0; i--) {
+      if (!moveBall(balls[i], dt)) balls.splice(i, 1);
+      if (game.state !== STATE.PLAYING) return;
+    }
+    if (balls.length === 0) loseLife();
+  }
+
+  function moveBall(ball, dt) {
     // Rastro
     ball.trail.push({ x: ball.x, y: ball.y });
     if (ball.trail.length > 12) ball.trail.shift();
@@ -627,11 +652,8 @@
       if (ball.x + ball.r > W) { ball.x = W - ball.r; ball.vx = -Math.abs(ball.vx); Sound.wall(); spark(ball.x, ball.y, "#4cc9f0", 4); }
       if (ball.y - ball.r < 0) { ball.y = ball.r; ball.vy = Math.abs(ball.vy); Sound.wall(); spark(ball.x, ball.y, "#4cc9f0", 4); }
 
-      // Suelo: pierde vida
-      if (ball.y - ball.r > H) {
-        loseLife();
-        return;
-      }
+      // Suelo: esta bola se pierde (la vida se resta cuando no queda ninguna)
+      if (ball.y - ball.r > H) return false;
 
       // Paleta
       if (
@@ -672,6 +694,7 @@
             ball.vy = ball.y < b.y + b.h / 2 ? -Math.abs(ball.vy) : Math.abs(ball.vy);
           }
           hitBrick(b, i);
+          if (game.state !== STATE.PLAYING) return true;
           break; // un ladrillo por sub-paso
         }
       }
@@ -684,6 +707,7 @@
       const rem = Math.sqrt(Math.max(0, v * v - ball.vx * ball.vx));
       ball.vx = (ball.vx >= 0 ? 1 : -1) * rem;
     }
+    return true;
   }
 
   function hitBrick(b, index) {
@@ -731,16 +755,46 @@
 
   /* ---------------- Efectos ---------------- */
   function spawnPowerup(b) {
+    const roll = Math.random();
+    const type = roll < POWERUPS.goodChance
+      ? "good"
+      : roll < POWERUPS.goodChance + POWERUPS.badChance ? "bad" : "blue";
     game.powerups.push({
       x: b.x + (b.w - POWERUPS.w) / 2,
       y: b.y,
       w: POWERUPS.w,
       h: POWERUPS.h,
-      type: Math.random() < POWERUPS.goodChance ? "good" : "bad"
+      type
     });
   }
 
+  function duplicateBalls() {
+    const snapshot = balls.filter((b) => !b.stuck);
+    for (const src of snapshot) {
+      if (balls.length >= MAX_BALLS) break;
+      const speed = Math.hypot(src.vx, src.vy) || ballSpeedForLevel(game.level);
+      const base = Math.atan2(src.vy, src.vx);
+      const angle = base + (Math.random() < 0.5 ? -1 : 1) * (0.25 + Math.random() * 0.35);
+      const copy = createBall(src.x, src.y, false);
+      copy.vx = Math.cos(angle) * speed;
+      copy.vy = Math.sin(angle) * speed;
+      // Evita trayectorias demasiado horizontales
+      const vyMin = speed * 0.28;
+      if (Math.abs(copy.vy) < vyMin) {
+        copy.vy = (copy.vy >= 0 ? 1 : -1) * vyMin;
+        copy.vx = (copy.vx >= 0 ? 1 : -1) * Math.sqrt(Math.max(0, speed * speed - vyMin * vyMin));
+      }
+      balls.push(copy);
+    }
+  }
+
   function applyPowerup(type) {
+    if (type === "blue") {
+      duplicateBalls();
+      burst(paddle.x + paddle.w / 2, PADDLE.y - 6, "#3aa0ff", 16);
+      Sound.multiball();
+      return;
+    }
     const factor = type === "good" ? 1.7 : 0.55;
     paddle.w = type === "good"
       ? Math.min(240, Math.round(paddle.baseW * factor))
@@ -792,7 +846,7 @@
 
     drawBricks();
     drawPaddle();
-    drawBall();
+    for (const b of balls) drawBall(b);
     drawPowerups();
     drawParticles();
 
@@ -865,7 +919,8 @@
 
   function drawPowerups() {
     for (const u of game.powerups) {
-      const color = u.type === "good" ? "#2ec866" : "#ff4d4d";
+      const color = u.type === "good" ? "#2ec866" : u.type === "bad" ? "#ff4d4d" : "#3aa0ff";
+      const symbol = u.type === "good" ? "+" : u.type === "bad" ? "−" : "×2";
       ctx.shadowColor = color;
       ctx.shadowBlur = 14;
       ctx.fillStyle = color;
@@ -873,14 +928,16 @@
       ctx.fill();
       ctx.shadowBlur = 0;
       ctx.fillStyle = "#0b0e1a";
-      ctx.font = "800 16px 'Segoe UI', system-ui, sans-serif";
+      ctx.font = u.type === "blue"
+        ? "800 12px 'Segoe UI', system-ui, sans-serif"
+        : "800 16px 'Segoe UI', system-ui, sans-serif";
       ctx.textAlign = "center";
-      ctx.fillText(u.type === "good" ? "+" : "−", u.x + u.w / 2, u.y + u.h / 2 + 6);
+      ctx.fillText(symbol, u.x + u.w / 2, u.y + u.h / 2 + (u.type === "blue" ? 4 : 6));
       ctx.textAlign = "left";
     }
   }
 
-  function drawBall() {
+  function drawBall(ball) {
     // Rastro
     for (let i = 0; i < ball.trail.length; i++) {
       const t = ball.trail[i];
