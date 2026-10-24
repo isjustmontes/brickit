@@ -4,8 +4,6 @@
 
 **BrickIt** es un minijuego arcade retro de estilo *Arkanoid* / *Breakout* desarrollado íntegramente en un único archivo `index.html` utilizando HTML5 Canvas y JavaScript puro, sin dependencias ni librerías externas.
 
-Este proyecto ha sido concebido y desarrollado dentro de un entorno de trabajo local asistido por herramientas de IA y Orca.
-
 ---
 
 ## 🎮 Enlace en vivo (Jugar online)
@@ -45,3 +43,8 @@ Al ser un proyecto autónomo alojado en un único archivo, no requiere instalaci
 1. Clona este repositorio en tu equipo:
    ```bash
    git clone [https://github.com/isjustmontes/brickit.git](https://github.com/isjustmontes/brickit.git)
+   
+---
+
+   Este proyecto ha sido concebido y desarrollado dentro de un entorno de trabajo local asistido por herramientas de IA y Orca.
+
